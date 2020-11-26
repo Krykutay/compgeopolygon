@@ -1,6 +1,7 @@
 var camera, scene, renderer;
 var geometry;
 var material1 = new THREE.LineBasicMaterial( { color: 0xffffff } );
+var material2 = new THREE.LineBasicMaterial( { color: 0x0000ff } );
 var points = [];
 var diagonals = [];
 var angleDeg = [];
@@ -112,14 +113,13 @@ function onDocumentKeyDown( event ){
                     prev = prev + points.length;
                 next = (i+1) % (points.length);
 
-                var det;
-                var d1,d2,d3;
-                det = (points[i].x - points[prev].x) * (points[next].y - points[prev].y) - (points[next].x - points[prev].x) * (points[i].y - points[prev].y);
+                var det1;
+                det1 = (points[i].x - points[prev].x) * (points[next].y - points[prev].y) - (points[next].x - points[prev].x) * (points[i].y - points[prev].y);
 
 
-                if (det < 0)
+                if (det1 < 0)
                     poly = 0; //convex
-                else if(det > 0)
+                else if(det1 > 0)
                     poly = 1; //concave
                 else
                     poly = 2; //collinear
@@ -135,12 +135,12 @@ function onDocumentKeyDown( event ){
                     prev = prev + points.length;
                 next = (i+1) % (points.length);
 
-                var det;
-                det = (points[i].x - points[prev].x) * (points[next].y - points[prev].y) - (points[next].x - points[prev].x) * (points[i].y - points[prev].y);
+                var det2;
+                det2 = (points[i].x - points[prev].x) * (points[next].y - points[prev].y) - (points[next].x - points[prev].x) * (points[i].y - points[prev].y);
 
-                if (det < 0)
+                if (det2 < 0)
                     poly = 1; //concave
-                else if(det > 0)
+                else if(det2 > 0)
                     poly = 0; //convex
                 else
                     poly = 2; //collinear
@@ -160,6 +160,10 @@ function onDocumentKeyDown( event ){
 
             var diagonalarray = [];
             var j;
+            if (i == 7){
+                //
+            }
+                
             for(j = 0; j<points.length; j++){
                 if (j == i || j == prev || j == next)
                     continue;
@@ -176,7 +180,7 @@ function onDocumentKeyDown( event ){
                         diagonalarray.push(j);
 
                 }
-                else{
+                else if (points_poly[i] == 1){
                     var diagonal = false;
                     if (det < 0)
                         diagonal = isLeft(points[i], points[j], points[prev]) && !(isLeft(points[i], points[j], points[next]));
@@ -194,23 +198,185 @@ function onDocumentKeyDown( event ){
         }
 
 
-        console.log(diagonaldict)
 
         
+        // Check if diagonals hit an edge
+        var badDiagonals = {}; // diagonals that cut an edge
+
+        for (i = 0; i < points.length; i++){
+            var j;
+            var temparray = [];
+            for (j = 0; j < diagonaldict[i].length; j++){
+                var p1, p2, q1, q2;
+                p1 = points[i];
+                q1 = points[diagonaldict[i][j]];
+                var k;
+                for (k = 0; k < points.length; k++){
+                    if (i == 1 && j == 6 && k == 1){
+                        j = 6;
+                    }
+                    if(k == i || (k+1) % points.length == i || k % points.length == diagonaldict[i][j] || (k+1) % points.length == diagonaldict[i][j])
+                        continue;
+
+                    p2 = points[k % points.length];
+                    q2 = points[(k+1) % points.length];
+
+                    if (doIntersect(p1, q1, p2, q2)){
+                        temparray.push(diagonaldict[i][j]);
+                        break;
+                    }
+                }
+                
+            }
+            badDiagonals[i] = temparray;
+            
+        }
+
+
+        for (i = 0; i<points.length; i++){
+            var j;
+            for (j = 0; j < badDiagonals[i].length; j++){
+                var index = diagonaldict[i].indexOf(badDiagonals[i][j]);
+                diagonaldict[i].splice(index, 1);
+            }
+        }
+
+        
+
+        
+        
+        // Graph coloring
+        
+        
+
+        for (i = 0; i<points.length-1; i++){
+            var j;
+            for (j = 0; j < diagonaldict[i].length; j++){
+                if (diagonaldict[i][j] == -1)
+                    continue;
+                var baddiagonalgrapgh = {};
+                var x;
+                for (x = 0; x < points.length; x++){
+                    baddiagonalgrapgh[x] = [];
+                }
+                var p1;
+                var q1;
+                p1 = points[i];
+                q1 = points[diagonaldict[i][j]];
+                var k;
+                for (k = i+1; k<points.length;k++){
+                    var tempbads = [];
+                    var l;
+                    for(l = 0; l < diagonaldict[k].length; l++){
+                        if (diagonaldict[k][l] == -1)
+                            continue;
+                        if(i == k || i == diagonaldict[k][l] || diagonaldict[i][j] == k || diagonaldict[i][j] == diagonaldict[k][l]){
+                            continue;
+                        }
+                        var p2, q2; 
+                        p2 = points[k];
+                        q2 = points[diagonaldict[k][l]];
+
+                        if (doIntersect(p1, q1, p2, q2)){
+                            diagonaldict[k][l] = -1;
+                        }
+                    }
+        
+                }
+
+            }    
+        }  
+        
+        
+        
+        
+        var pointsD = [];
+
+        for(i = 0; i<points.length; i++){
+            pointsD.push(points[i]);
+            var j;
+            for(j = 0; j < diagonaldict[i].length; j++){
+                if (diagonaldict[i][j] == -1)
+                    continue;
+                pointsD.push(points[diagonaldict[i][j]]);
+                geometry = new THREE.BufferGeometry().setFromPoints( pointsD );
+    
+                var line = new THREE.Line( geometry, material2 );
+            
+                scene.add( line );
+                var pointsD = [];
+                pointsD.push(points[i]);
+            }
+            var pointsD = [];
+
+        }
+        
+
+        
+        console.log(diagonaldict);
 
         break;
     }
 }
 
 function isLeft(a, b, c){
-    area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
-    console.log(area);
+    var area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
     if (area > 0)
         return true;
     else
         return false;
 }
 
+function onSegment(p, q, r){
+    if ((q.x <= Math.max(p.x, r.x)) && (q.x >= Math.min(p.x, r.x)) && (q.y <= Math.max(p.y, r.y)) && (q.y >= Math.min(p.y, r.y)))
+        return true;
+
+    return false;
+}
+
+function orientationOfLines(p, q, r){
+
+    var val = ((q.y - p.y) * (r.x - q.x)) - ((q.x - p.x) * (r.y - q.y));
+    if (val > 0)
+        return 1  //clockwise
+    else if (val < 0)
+        return 2  //counterclockwise
+    else
+        return 0  //colinear
+}
+
+function doIntersect(p1,q1,p2,q2){
+      
+    var o1 = orientationOfLines(p1, q1, p2) 
+    var o2 = orientationOfLines(p1, q1, q2) 
+    var o3 = orientationOfLines(p2, q2, p1) 
+    var o4 = orientationOfLines(p2, q2, q1) 
+  
+    if ((o1 != o2) && (o3 != o4))
+        return true
+  
+    // Special Cases 
+  
+    // p1 , q1 and p2 are colinear and p2 lies on segment p1q1 
+    if ((o1 == 0) && onSegment(p1, p2, q1))
+        return true
+  
+    // p1 , q1 and q2 are colinear and q2 lies on segment p1q1 
+    if ((o2 == 0) && onSegment(p1, q2, q1))
+        return true
+  
+    // p2 , q2 and p1 are colinear and p1 lies on segment p2q2 
+    if ((o3 == 0) && onSegment(p2, p1, q2))
+        return true
+  
+    // p2 , q2 and q1 are colinear and q1 lies on segment p2q2 
+    if ((o4 == 0) && onSegment(p2, q1, q2))
+        return true
+  
+    // If none of the cases 
+    return false
+
+}
 function DrawLines(coord){
     points.push( new THREE.Vector2( coord.x, coord.y ));
 
